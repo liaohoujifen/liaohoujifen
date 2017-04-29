@@ -1,0 +1,1884 @@
+#!/bin/bash
+
+# Copyright (c) 2016 Zichoole Inc.
+# All rights reserved.
+#
+# "ELK Operation Script" version 1.0
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are
+# met:
+#
+#    * Redistributions of source code must retain the above copyright
+# notice, this list of conditions and the following disclaimer.
+#    * Redistributions in binary form must reproduce the above
+# copyright notice, this list of conditions and the following disclaimer
+# in the documentation and/or other materials provided with the
+# distribution.
+#    * Neither the name of Zichoole Inc. nor the names of its
+# contributors may be used to endorse or promote products derived from
+# this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL__ THE COPYRIGHT
+# OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES_; LOSS OF USE,
+# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+# ---
+# Author:  Zich Liu
+# Created: 2016-11-10 12:20:00
+# E-mail:  liuzhenfu@sqian.com
+#
+# ---
+# Description:
+#   The script for operating ELK services.
+#
+# ---
+# TODO:
+#   *1. Add "clean target", "clean repository" function;
+#   *2. Add target modules to process.
+#
+#*************************************************************************************
+
+readonly __VERSION__='
+    \033[46;30m VERSION 1.0, Copyright (C) 2016 Zichoole Inc. \033[0m \n
+'
+
+readonly __WARNING__='
+    \033[41;33m \033[05m [WARNING] Need bash version 4.1.x above ! \033[0m \n
+'
+
+readonly __DESCRIPTION__='
+    \033[43;34m To start, run or stop ELK services, and backup, clean logs. \033[0m \n
+'
+
+readonly __INTRODUCTION__='
+    \033[44;37m Usage: \033[0m \n
+        \t \033[47;30m optelk [-S {SERVICES}] [-F FILE] [-D DIRECTORY] [-N NUMBER] [-L OPT_LOG_FILE] [-BCMelkadsrpwbcgnvmh] ! \033[0m \n\n
+    \033[42;34m {SERVICES} should be: \033[0m \n
+        \t \033[47;30m "logstash"(or "l"), "es"(or "e") or "kibana"(or "k") ! \033[0m \n\n
+    \033[42;34m {FILE} should be: \033[0m \n
+        \t \033[47;30m The file you want to backup ! \033[0m \n\n
+    \033[42;34m {DIRECTORY} should be: \033[0m \n
+        \t \033[47;30m The directory you want to save your files to backup, or the right directory when cleaning the directory ! \033[0m \n\n
+    \033[42;34m {NUMBER} should be: \033[0m \n
+        \t \033[47;30m The number of files you want to hold when cleaning the directory ! \033[0m \n\n
+    \033[42;34m {OPT_LOG_FILE} should be: \033[0m \n
+        \t \033[47;30m The opt log file to print, default ${HOME}/.optelk.log ! \033[0m \n\n
+    \033[42;34m {OTHERS} means: \033[0m \n
+        \t \033[47;30m "-B" means "--backup-files" \033[0m \n
+        \t \033[47;30m "-C" means "--clean-directory" \033[0m \n
+        \t \033[47;30m "-M" means "--manage-files" \033[0m \n
+        \t \033[47;30m "-e" means "--es" \033[0m \n
+        \t \033[47;30m "-l" means "--logstash" \033[0m \n
+        \t \033[47;30m "-k" means "--kibana" \033[0m \n
+        \t \033[47;30m "-a" means "--all" \033[0m \n
+        \t \033[47;30m "-d" means "--deploy-services" \033[0m \n
+        \t \033[47;30m "-s" means "--start-services" \033[0m \n
+        \t \033[47;30m "-r" means "--run-services" \033[0m \n
+        \t \033[47;30m "-p" means "--stop-services" \033[0m \n
+        \t \033[47;30m "-w" means "--show-services" \033[0m \n
+        \t \033[47;30m "-b" means "--backup-logs" \033[0m \n
+        \t \033[47;30m "-c" means "--clean-logs" \033[0m \n
+        \t \033[47;30m "-g" means "--manage-logs" \033[0m \n
+        \t \033[47;30m "-n" means "--manage-es" \033[0m \n
+        \t \033[47;30m "-v" means "--version" \033[0m \n
+        \t \033[47;30m "-m" means "--description" \033[0m \n
+        \t \033[47;30m "-h" means "--help" \033[0m \n
+    \033[45;30m Examples: \033[0m \n
+        \t \033[47;30m optelk -ra \033[0m \n
+        \t \033[47;30m optelk -r -a \033[0m \n
+        \t \033[47;30m optelk -r -S all \033[0m \n
+        \t \033[47;30m optelk -r -S all-logstash-es \033[0m \n
+        \t \033[47;30m optelk -r -S all-l-e \033[0m \n
+        \t \033[47;30m optelk -r -S logstash,es \033[0m \n
+        \t \033[47;30m optelk -r -S l,e \033[0m \n
+        \t \033[47;30m optelk -ga \033[0m \n
+        \t \033[47;30m optelk -g -a \033[0m \n
+        \t \033[47;30m optelk -g -S all \033[0m \n
+        \t \033[47;30m optelk -g -S all-logstash-es \033[0m \n
+        \t \033[47;30m optelk -g -S all-l-e \033[0m \n
+        \t \033[47;30m optelk -g -S logstash,es \033[0m \n
+        \t \033[47;30m optelk -g -S l,e \033[0m \n
+'
+
+#*******************************************************************************************************
+
+readonly TRUE__=0
+readonly FALSE__=1
+
+readonly FAIL__="fail"
+readonly SUCCESS__="success"
+
+readonly ALL__="all"
+readonly NONE__="none"
+readonly DEFAULT__="default"
+
+readonly INFO__="INFO"
+readonly DEBUG__="DEBUG"
+readonly WARN__="WARN"
+readonly ERROR__="ERROR"
+readonly FATAL__="FATAL"
+
+readonly CLEAN__="clean"
+readonly BACKUP__="backup"
+readonly MANAGE__="manage"
+
+readonly DIR_TYPE__=10
+readonly FILE_TYPE__=20
+readonly LINK_TYPE__=30
+readonly DIR_LINK_TYPE__=31
+readonly FILE_LINK_TYPE__=32
+readonly NONE_TYPE__=40
+
+function __get_localhost() {
+    echo "$(
+             ifconfig -a |
+             egrep 'inet' |
+             egrep -v '127.0.0.1' |
+             egrep -v 'inet6' |
+             awk '{print $2}' |
+             tr -d 'addr:'
+    )"
+}
+
+#*******************************************************************************************************
+
+readonly SYSTEM_BIN_DIR_="/usr/bin"
+readonly SYSTEM_BIN_FILE_="${SYSTEM_BIN_DIR_}/$0"
+readonly SCRIPT_DIR_="$(cd $(dirname $0) && pwd)"
+readonly SCRIPT_FILE_="${SCRIPT_DIR_}/$0"
+
+readonly START_="start"
+readonly RUN_="run"
+readonly STOP_="stop"
+readonly SHOW_="show"
+readonly BACKUP_LOGS_="backup_logs"
+readonly CLEAN_LOGS_="clean_logs"
+readonly MANAGE_LOGS_="manage_logs"
+readonly MANAGE_ES_="manage_es"
+readonly DEPLOY_="deploy"
+
+readonly LOGSTASH_="logstash"
+readonly ES_="elasticsearch"
+readonly KIBANA_="kibana"
+
+readonly LOGSTASH_DOWNLOAD_URL_="https://artifacts.elastic.co/downloads/logstash/logstash-5.0.1.tar.gz"
+readonly LOGSTASH_SHA1_DOWNLOAD_URL_="https://artifacts.elastic.co/downloads/logstash/logstash-5.0.1.tar.gz.sha1"
+readonly ES_DOWNLOAD_URL_="https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-5.0.1.tar.gz"
+readonly ES_SHA1_DOWNLOAD_URL_="https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-5.0.1.tar.gz.sha1"
+
+case "$(uname -o | tr '[A-Z]' '[a-z]')" in
+    *"darwin"*)
+        readonly KIBANA_DOWNLOAD_URL_="https://artifacts.elastic.co/downloads/kibana/kibana-5.0.1-darwin-x86_64.tar.gz"
+        readonly KIBANA_SHA1_DOWNLOAD_URL_="https://artifacts.elastic.co/downloads/kibana/kibana-5.0.1-darwin-x86_64.tar.gz.sha1"
+        ;;
+    *"linux"*)
+        readonly KIBANA_DOWNLOAD_URL_="https://artifacts.elastic.co/downloads/kibana/kibana-5.0.1-linux-x86_64.tar.gz"
+        readonly KIBANA_SHA1_DOWNLOAD_URL_="https://artifacts.elastic.co/downloads/kibana/kibana-5.0.1-linux-x86_64.tar.gz.sha1"
+        ;;
+    *)
+        echo -e "[ERROR] Unsupported platform, only darwin and linux system supported !"
+        exit "${FAIL__}"
+        ;;
+esac
+
+readonly OPT_DIR_="/opt"
+readonly ELK_DIR_="${OPT_DIR_}/ELK"
+readonly INSTALLATIONS_DIR_="${ELK_DIR_}/installations"
+
+function __get_filename() {
+    local url=$1
+    local filename="${url##*/}"
+    case "${filename}" in
+        *.tar)
+            echo "${filename%*.tar}"
+            ;;
+        *.tar.gz)
+            echo "${filename%*.tar.gz}"
+            ;;
+        *.tgz)
+            echo "${filename%*.tgz}"
+            ;;
+        *.tar.bz2)
+            echo "${filename%*.tar.bz2}"
+            ;;
+        *.tar.Z)
+            echo "${filename%*.tar.Z}"
+            ;;
+        *.gz)
+            echo "${filename%*.gz}"
+            ;;
+        *.Z)
+            echo "${filename%*.Z}"
+            ;;
+        *.bz2)
+            echo "${filename%*.bz2}"
+            ;;
+        *.zip)
+            echo "${filename%*.zip}"
+            ;;
+        *)
+            echo "${filename}"
+            ;;
+    esac
+}
+
+readonly LOGSTASH_ROOT_DIR_="${ELK_DIR_}/$(__get_filename ${LOGSTASH_DOWNLOAD_URL_})"
+readonly LOGSTASH_BIN_DIR_="${LOGSTASH_ROOT_DIR_}/bin"
+readonly LOGSTASH_CONF_DIR_="${LOGSTASH_ROOT_DIR_}/config"
+readonly LOGSTASH_LOG_DIR_="${LOGSTASH_ROOT_DIR_}/logs"
+readonly LOGSTASH_LOG_BACKUP_DIR_="${LOGSTASH_ROOT_DIR_}/logs_backup"
+readonly LOGSTASH_BIN_FILE_="${LOGSTASH_BIN_DIR_}/logstash"
+readonly LOGSTASH_CONF_FILE_="${LOGSTASH_CONF_DIR_}/logstash-indexer.conf"
+readonly LOGSTASH_LOG_FILE_="${LOGSTASH_LOG_DIR_}/logstash.log"
+
+readonly ES_ROOT_DIR_="${ELK_DIR_}/$(__get_filename ${ES_DOWNLOAD_URL_})"
+readonly ES_BIN_DIR_="${ES_ROOT_DIR_}/bin"
+readonly ES_CONF_DIR_="${ES_ROOT_DIR_}/config"
+readonly ES_LOG_DIR_="${ES_ROOT_DIR_}/logs"
+readonly ES_LOG_BACKUP_DIR_="${ES_ROOT_DIR_}/logs_backup"
+readonly ES_BIN_FILE_="${ES_BIN_DIR_}/elasticsearch"
+readonly ES_PLUGIN_FILE_="${ES_BIN_DIR_}/elasticsearch-plugin"
+readonly ES_CONF_FILE_="${ES_CONF_DIR_}/elasticsearch.yml"
+readonly ES_LOG_FILE_="${ES_LOG_DIR_}/elasticsearch.log"
+
+readonly ES_PLUGINS_=(\
+    "http://maven.nlpcn.org/org/ansj/elasticsearch-analysis-ansj/5.0.1.0/elasticsearch-analysis-ansj-5.0.1.0-release.zip"
+)
+
+readonly KIBANA_ROOT_DIR_="${ELK_DIR_}/$(__get_filename ${KIBANA_DOWNLOAD_URL_})"
+readonly KIBANA_BIN_DIR_="${KIBANA_ROOT_DIR_}/bin"
+readonly KIBANA_CONF_DIR_="${KIBANA_ROOT_DIR_}/config"
+readonly KIBANA_LOG_DIR_="${KIBANA_ROOT_DIR_}/logs"
+readonly KIBANA_LOG_BACKUP_DIR_="${KIBANA_ROOT_DIR_}/logs_backup"
+readonly KIBANA_BIN_FILE_="${KIBANA_BIN_DIR_}/kibana"
+readonly KIBANA_CONF_FILE_="${KIBANA_CONF_DIR_}/kibana.yml"
+readonly KIBANA_LOG_FILE_="${KIBANA_LOG_DIR_}/kibana.log"
+
+readonly LOGSTASH_CONFIG_CONTENT_='
+    input {
+        file {
+            path => [
+                "/home/shanqian/api/log/log*",
+                "/home/shanqian/user/log/log*",
+                "/home/shanqian/review/log/log*",
+                "/home/shanqian/feed/log/log*",
+                "/home/shanqian/third-party/log/log*"
+            ]
+            start_position => "beginning"
+            codec => "json"
+        }
+    }
+
+    filter {
+        if [message] !~ /apptime/ {
+            drop { }
+        }
+        json {
+            source => "message"
+            target => "jsoncontent"
+        }
+        json {
+            source => "message"
+            target => "jsoncontent"
+        }
+        mutate {
+            remove_field => ["message", "logger_name", "HOSTNAME", "level_value"]
+        }
+    }
+
+    output {
+        elasticsearch {
+            hosts => ["localhost:9200"]
+        }
+        stdout {
+            codec => rubydebug
+        }
+    }
+'
+
+readonly ES_CONFIG_CONTENT_='
+#    index.analysis.analyzer.default.type: index_ansj
+#    index.analysis.analyzer.default_search.type: query_ansj
+'
+
+readonly KIBANA_CONFIG_CONTENT_="
+    server.host: \"$(__get_localhost)\"
+    server.port: 5601
+    elasticsearch.url: \"http://localhost:9200\"
+"
+
+readonly CRONTAB_SETTINGS_="
+    1 1 * * * ${SYSTEM_BIN_FILE_} -n -N 7 2>&1 >/dev/null
+    1 1 * * * ${SYSTEM_BIN_FILE_} -g -N 7 2>&1 >/dev/null
+"
+
+readonly DEFAULT_HOLD_NUMBER_=99999999
+
+readonly MODULE_MARKS_="
+    l:${LOGSTASH_};
+    e:${ES_};
+    k:${KIBANA_}
+"
+
+readonly MODULE_TAGS_="
+"
+
+readonly ALL_MODULES_=(\
+    "${LOGSTASH_}" \
+    "${ES_}" \
+    "${KIBANA_}"\
+)
+
+OPT_ELK_LOG_="${HOME}/.optelk.log"
+
+#*******************************************************************************************************
+
+function __write_log() {
+    local genre=$1
+    local message=$2
+    case "${genre}" in
+        "${INFO__}")
+            ;;
+        "${DEBUG__}")
+            ;;
+        "${WARN__}")
+            ;;
+        "${ERROR__}")
+            ;;
+        "${FATAL__}")
+            ;;
+        *)
+            genre="${INFO__}"
+            ;;
+    esac
+    echo -e "[$(date "+%Y-%m-%d %H:%M:%S.%N %Z")] [${genre}] [${FUNCNAME[@]}] ${message}" 2>&1 >> ${OPT_ELK_LOG_}
+}
+
+function __log_info() {
+    local message=$1
+    __write_log "${INFO__}" "${message}"
+}
+
+function __log_debug() {
+    local message=$1
+    __write_log "${DEBUG__}" "${message}"
+}
+
+function __log_warn() {
+    local message=$1
+    __write_log "${WARN__}" "${message}"
+}
+
+function __log_error() {
+    local message=$1
+    __write_log "${ERROR__}" "${message}"
+}
+
+function __log_fatal() {
+    local message=$1
+    __write_log "${FATAL__}" "${message}"
+}
+
+function __exit() {
+    local exit_code=$1
+    case "${exit_code}" in
+        "")
+            exit ${TRUE__}
+            ;;
+        "${SUCCESS__}")
+            exit ${TRUE__}
+            ;;
+        "${FAIL__}")
+            exit ${FALSE__}
+            ;;
+        *)
+            exit ${FALSE__}
+            ;;
+    esac
+}
+
+function __map() {
+    local key=$1
+    local map_string=$2
+
+    echo "${map_string}" |
+    sed 's/^[ \t\n\r]*//g' |
+    awk '
+        BEGIN {
+            value = ""
+        }
+        {
+            split($1, items, ";");
+            for (i in items) {
+                if (length(items[i]) > 0) {
+                    split(items[i], key_value, ":");
+                    if (length(key_value) == 2) {
+                        if (key_value[1] == "'"${key}"'") {
+                            value = key_value[2]
+                        }
+                    }
+                }
+            }
+        }
+        END {
+            print value
+        }
+    '
+}
+
+function __is_digit() {
+    local string=$1
+    if [ "${string}" == "$(echo ${string} | egrep -o '[1-9][0-9]{0,}|[0-9]')" ]; then
+        return ${TRUE__}
+    fi
+    return ${FALSE__}
+}
+
+function __split() {
+    local string=$1
+    local split_char=$2
+
+    local OLD_IFS="${IFS}"
+    IFS="${split_char}"
+    local array=(${string})
+    IFS="${OLD_IFS}"
+    echo "${array[@]}" && unset array
+}
+
+function __get_module() {
+    local module=$1
+    if [ -z "${module}" ]; then
+        echo "${NONE__}"
+    else
+        local full_name=$(__map "${module}" "${MODULE_MARKS_}")
+        if [ -z "${full_name}" ]; then
+            echo "${module}"
+        else
+            echo "${full_name}"
+        fi
+    fi
+}
+
+function __format_modules() {
+    local modules=$1
+
+    if [[ "${modules}" == "${NONE__}" || "${modules}" == "" ]]; then
+        echo ""
+    elif [[ "${modules}" == "${ALL__}" ||
+            "${modules}" == "${ALL__}""-" ||
+            "${modules}" == "${DEFAULT__}" ]]; then
+        echo "${ALL_MODULES_[@]}"
+    elif [ "${modules:0:${#ALL__}+1}" == "${ALL__}""-" ]; then
+        local valid_modules=(${ALL_MODULES_[@]})
+        for module in $(__split "${modules:${#ALL__}+1}" "-"); do
+            module=$(__get_module "${module}")
+            for i in ${!valid_modules[@]}; do
+                if [ "${valid_modules[$i]}" == "${module}" ]; then
+                    unset valid_modules[$i]
+                fi
+            done
+        done
+        echo "${valid_modules[@]}" && unset valid_modules
+    else
+        modules=($(__split "${modules}" ","))
+        local valid_modules=(${ALL_MODULES_[@]})
+        for i in ${!valid_modules[@]}; do
+            local exist="${FALSE__}"
+            for module in ${modules[@]}; do
+                module=$(__get_module "${module}")
+                if [ "${valid_modules[$i]}" == "${module}" ]; then
+                    exist="${TRUE__}"
+                    break
+                fi
+            done
+
+            if [ "${exist}" == "${FALSE__}" ]; then
+                unset valid_modules[$i]
+            fi
+        done
+        unset modules && echo "${valid_modules[@]}" && unset valid_modules
+    fi
+}
+
+function __exist_file() {
+    local file=$1
+    if [ -z "${file}" ]; then
+        return ${FALSE__}
+    fi
+    local info=$(ls ${file} 2>&1 | egrep "cannot access")
+    if [ -n "${info}" ]; then
+        return ${FALSE__}
+    fi
+    return ${TRUE__}
+}
+
+function __get_linktype() {
+    local link_file=$1
+    if [[ -z "${link_file}" || ! -h "${link_file}" ]]; then
+        return ${NONE_TYPE__}
+    fi
+    __exist_file "${link_file}/"
+    if [ $? == ${TRUE__} ]; then
+        return ${DIR_LINK_TYPE__}
+    fi
+    return ${FILE_LINK_TYPE__}
+}
+
+function __get_filetype() {
+    local file=$1
+    if [ -d "${file}" ]; then
+        return ${DIR_TYPE__}
+    fi
+
+    if [ -h "${file}" ]; then
+        __get_linktype "${file}"
+        return $?
+    fi
+
+    if [ -f "${file}" ]; then
+        return ${FILE_TYPE__}
+    fi
+
+    return ${NONE_TYPE__}
+}
+
+function __rename_file() {
+    local origin_file=$1
+    __log_info "($@) __rename_file begin ... ... "
+    __exist_file "${origin_file}"
+    if [ $? == ${TRUE__} ]; then
+        mv "${origin_file}" "${origin_file}.$(date +%Y%m%d%H%M%S)"
+    fi
+}
+
+function __create_dir() {
+    local dir=$1
+    __log_info "($@) __create_dir begin ... ... "
+    __is_directory "${dir}"
+    if [ $? == ${FALSE__} ]; then
+        if [[ -h "${dir}" || -f "${dir}" ]]; then
+            mv "${dir}" "${dir}.$(date +%Y%m%d%H%M%S)"
+        fi
+        mkdir -p "${dir}"
+    fi
+}
+
+function __is_directory() {
+    local dir=$1
+    __get_filetype "${dir}"
+    local filetype=$?
+    if [[ ${filetype} == ${DIR_TYPE__} || ${filetype} == ${DIR_LINK_TYPE__} ]]; then
+        return ${TRUE__}
+    fi
+    return ${FALSE__}
+}
+
+function __is_file() {
+    local file=$1
+    __get_filetype "${file}"
+    local filetype=$?
+    if [[ ${filetype} == ${FILE_TYPE__} || ${filetype} == ${FILE_LINK_TYPE__} ]]; then
+        return ${TRUE__}
+    fi
+    return ${FALSE__}
+}
+
+function __stop_progress() {
+    local progress_tag=$1
+    __log_info "($@) __stop_progress begin ... ... "
+    local progresses=($(__get_progresses "${progress_tag}"))
+    if [ ${#progresses[@]} -gt 0 ]; then
+        for progress_id in ${progresses[@]}; do
+            __is_digit "${progress_id}"
+            if [ $? == ${TRUE__} ]; then
+                kill -9 "${progress_id}"
+            fi
+        done
+    fi
+    unset progresses
+}
+
+function __command_exist() {
+    local command=$1
+    if [ -n "$(command -v ${command})" ]; then
+        return ${TRUE__}
+    fi
+    return ${FALSE__}
+}
+
+function __download_file() {
+    local download_url=$1
+    local download_dir=$2
+
+    __log_info "($@) __download_file begin ... ... "
+
+    __is_directory "${download_dir}"
+    if [ $? == ${TRUE__} ]; then
+        if [ -n "${download_url}" ]; then
+            __command_exist "wget"
+            if [ $? == ${TRUE__} ]; then
+                wget --limit-rate=20M -c -N -np -nd -t 20 -T 20 -P "${download_dir}/" "${download_url}"
+                return ${TRUE__}
+            else
+                __command_exist "curl"
+                if [ $? == ${TRUE__} ]; then
+                    __is_file "${download_dir}/${download_url##*/}"
+                    if [$? == ${FALSE__}]; then
+                        curl -C --limit-rate 20M --connect-timeout 10 -m 20 -o "${download_dir}/${download_url##*/}" "${download_url}"
+                    else
+                        __log_info "($@) Download file already exist !"
+                    fi
+                    return ${TRUE__}
+                else
+                    __log_error "($@) Download command not exist !"
+                fi
+            fi
+        else
+            __log_error "($@) Invalid download url !"
+        fi
+    else
+        __log_error "($@) Invalid download dir !"
+    fi
+
+    return ${FALSE__}
+}
+
+function __check_sha1() {
+    local target_file=$1
+    local sha1_file=$2
+
+    __log_info "($@) __check_sha1 begin ... ... "
+
+    __is_file "${target_file}"
+    if [ $? == ${FALSE__} ]; then
+        return ${FALSE__}
+    fi
+
+    __is_file "${sha1_file}"
+    if [ $? == ${FALSE__} ]; then
+        return ${FALSE__}
+    fi
+
+    local current_sha1="$(sha1sum ${target_file} | awk '{print $1}')"
+    local right_sha1="$(cat ${sha1_file} | awk '{print $1}')"
+    if [ "${current_sha1}" != "${right_sha1}" ]; then
+        return ${FALSE__}
+    fi
+
+    return ${TRUE__}
+}
+
+function __uncompression() {
+    local compression_file=$1
+    local uncompression_dir=$2
+
+    __log_info "($@) __uncompression begin ... ... "
+
+    __is_file "${compression_file}"
+    if [ $? == ${TRUE__} ]; then
+        __is_directory "${uncompression_dir}"
+        if [ $? == ${TRUE__} ]; then
+            case "${compression_file}" in
+                *.tar)
+                    tar -xf "${compression_file}" -C "${uncompression_dir}"
+                    return ${TRUE__}
+                    ;;
+                *.tar.gz|.tgz)
+                    tar -xzf "${compression_file}" -C "${uncompression_dir}"
+                    return ${TRUE__}
+                    ;;
+                *.tar.bz2)
+                    tar -xjf "${compression_file}" -C "${uncompression_dir}"
+                    return ${TRUE__}
+                    ;;
+                *.tar.Z)
+                    tar -xZf "${compression_file}" -C "${uncompression_dir}"
+                    return ${TRUE__}
+                    ;;
+                *.gz)
+                    gunzip -c "${compression_file}" > "${uncompression_dir}/${compression_file##/}"
+                    return ${TRUE__}
+                    ;;
+                *.Z)
+                    uncompress -c "${compression_file}" > "${uncompression_dir}/${compression_file##/}"
+                    return ${TRUE__}
+                    ;;
+                *.bz2)
+                    bunzip2 -c "${compression_file}" > "${uncompression_dir}/${compression_file##/}"
+                    return ${TRUE__}
+                    ;;
+                *.zip)
+                    unzip "${compression_file}" -d "${uncompression_dir}"
+                    return ${TRUE__}
+                    ;;
+                *)
+                    __log_error "($@) Not supported compression file !"
+                    ;;
+            esac
+        else
+            __log_error "($@) Uncompression-Directory not exist !"
+        fi
+    else
+        __log_error "($@) Compression-File not exist !"
+    fi
+
+    return ${FALSE__}
+}
+
+function __get_progresses() {
+    local progress_tag=$1
+    if [ -n "${progress_tag}" ]; then
+        local progresses=(
+            $(ps aux | \
+                egrep "${progress_tag}" | \
+                egrep -v "egrep" | \
+                awk '{print $2}'\
+            )
+        )
+        if [ ${#progresses[@]} -gt 0 ]; then
+            echo "${progresses[@]}"
+        else
+            echo ""
+        fi
+        unset progresses
+    else
+        echo ""
+    fi
+}
+
+function __clean_dir() {
+    local directory=$1
+    local hold_number=$2
+
+    __log_info "($@) __clean_dir begin ... ... "
+
+    __is_digit "${hold_number}"
+    if [ $? == ${FALSE__} ]; then
+        hold_number="${DEFAULT_HOLD_NUMBER_}"
+    fi
+
+    __is_directory "${directory}"
+    if [ $? == ${TRUE__} ]; then
+        directory="$(readlink -f ${directory})"
+        local files_number="$(ls -A ${directory} | wc -l)"
+        local remove_number=$((${files_number} - ${hold_number}))
+        if [ ${remove_number} -gt 0 ]; then
+            local remove_files=($(ls -At "${directory}" | tail -n "${remove_number}"))
+            for file in ${remove_files[@]}; do
+                if [[ -n "${directory}" && -n "${file}" ]]; then
+                    rm -rf "${directory}/${file}"
+                fi
+            done
+            unset remove_files
+        fi
+    fi
+}
+
+function __backup_file() {
+    local origin_file=$1
+    local backup_dir=$2
+
+    __log_info "($@) __backup_file begin ... ... "
+
+    if [ -n "${backup_dir}" ]; then
+        __create_dir "${backup_dir}" &&
+        backup_dir="${backup_dir}/$(date +%Y%m%d%H%M%S)"
+
+        __get_filetype "${origin_file}"
+        local filetype=$?
+        if [ ${filetype} == ${DIR_TYPE__} ]; then
+            if [ -n "$(ls -A ${origin_file}/)" ]; then
+                __rename_file "${backup_dir}" &&
+                mv "${origin_file}" "${backup_dir}" &&
+                mkdir -p "${origin_file}"
+            fi
+        elif [ ${filetype} == ${FILE_TYPE__} ]; then
+            __rename_file "${backup_dir}" &&
+            mkdir -p "${backup_dir}" &&
+            mv "${origin_file}" "${backup_dir}"
+        elif [ ${filetype} == ${DIR_LINK_TYPE__} ]; then
+            if [ -n "$(ls -A ${origin_file}/)" ]; then
+                origin_file="$(readlink -f ${origin_file})"
+                __rename_file "${backup_dir}" &&
+                mv "${origin_file}" "${backup_dir}" &&
+                mkdir -p "${origin_file}"
+            fi
+        elif [ ${filetype} == ${FILE_LINK_TYPE__} ]; then
+            origin_file="$(readlink -f ${origin_file})"
+            __rename_file "${backup_dir}" &&
+            mkdir -p "${backup_dir}" &&
+            mv "${origin_file}" "${backup_dir}"
+        else
+            __log_error "($@) Origin filename error !"
+            return ${FALSE__}
+        fi
+    else
+        __log_error "($@) Backup directory error !"
+        return ${FALSE__}
+    fi
+
+    return ${TRUE__}
+}
+
+function __manage_files() {
+    local backup_file=$1
+    local backup_dir=$2
+    local hold_number=$3
+
+    __log_info "($@) __manage_files begin ... ... "
+    __backup_file "${backup_file}" "${backup_dir}"
+    __clean_dir "${backup_dir}" "${hold_number}"
+}
+
+#*******************************************************************************************************
+
+function _check_global() {
+    __log_info "($@) _check_global begin ... ... "
+
+    __is_directory "${OPT_DIR_}"
+    if [ $? == ${FALSE__} ]; then
+        return ${FALSE__}
+    fi
+
+    __is_directory "${ELK_DIR_}"
+    if [ $? == ${FALSE__} ]; then
+        return ${FALSE__}
+    fi
+
+    return ${TRUE__}
+}
+
+function _check_logstash() {
+    __log_info "($@) _check_logstash begin ... ... "
+
+    __is_directory "${LOGSTASH_ROOT_DIR_}"
+    if [ $? == ${FALSE__} ]; then
+        return ${FALSE__}
+    fi
+
+    __is_directory "${LOGSTASH_BIN_DIR_}"
+    if [ $? == ${FALSE__} ]; then
+        return ${FALSE__}
+    fi
+
+    __is_directory "${LOGSTASH_CONF_DIR_}"
+    if [ $? == ${FALSE__} ]; then
+        return ${FALSE__}
+    fi
+
+    __is_file "${LOGSTASH_BIN_FILE_}"
+    if [ $? == ${FALSE__} ]; then
+        return ${FALSE__}
+    fi
+
+    __is_file "${LOGSTASH_CONF_FILE_}"
+    if [ $? == ${FALSE__} ]; then
+        return ${FALSE__}
+    fi
+
+    return ${TRUE__}
+}
+
+function _check_es() {
+    __log_info "($@) _check_es begin ... ... "
+
+    __is_directory "${ES_ROOT_DIR_}"
+    if [ $? == ${FALSE__} ]; then
+        return ${FALSE__}
+    fi
+
+    __is_directory "${ES_BIN_DIR_}"
+    if [ $? == ${FALSE__} ]; then
+        return ${FALSE__}
+    fi
+
+    __is_directory "${ES_CONF_DIR_}"
+    if [ $? == ${FALSE__} ]; then
+        return ${FALSE__}
+    fi
+
+    __is_file "${ES_BIN_FILE_}"
+    if [ $? == ${FALSE__} ]; then
+        return ${FALSE__}
+    fi
+
+    __is_file "${ES_CONF_FILE_}"
+    if [ $? == ${FALSE__} ]; then
+        return ${FALSE__}
+    fi
+
+    return ${TRUE__}
+}
+
+function _check_kibana() {
+    __log_info "($@) _check_kibana begin ... ... "
+
+    __is_directory "${KIBANA_ROOT_DIR_}"
+    if [ $? == ${FALSE__} ]; then
+        return ${FALSE__}
+    fi
+
+    __is_directory "${KIBANA_BIN_DIR_}"
+    if [ $? == ${FALSE__} ]; then
+        return ${FALSE__}
+    fi
+
+    __is_directory "${KIBANA_CONF_DIR_}"
+    if [ $? == ${FALSE__} ]; then
+        return ${FALSE__}
+    fi
+
+    __is_file "${KIBANA_BIN_FILE_}"
+    if [ $? == ${FALSE__} ]; then
+        return ${FALSE__}
+    fi
+
+    __is_file "${KIBANA_CONF_FILE_}"
+    if [ $? == ${FALSE__} ]; then
+        return ${FALSE__}
+    fi
+
+    return ${TRUE__}
+}
+
+function _check_services() {
+    local services=$1
+
+    __log_info "($@) _check_services begin ... ... "
+
+    _check_global
+    if [ $? == 1 ]; then
+        return ${FALSE__}
+    fi
+
+    services=($(__format_modules "${services}"))
+    for service in ${services[@]}; do
+        case "${service}" in
+            "${LOGSTASH_}")
+                _check_logstash
+                if [ $? == ${FALSE__} ]; then
+                    return ${FALSE__}
+                fi
+                ;;
+            "${ES_}")
+                _check_es
+                if [ $? == ${FALSE__} ]; then
+                    return ${FALSE__}
+                fi
+                ;;
+            "${KIBANA_}")
+                _check_kibana
+                if [ $? == ${FALSE__} ]; then
+                    return ${FALSE__}
+                fi
+                ;;
+            *)
+                continue
+                ;;
+        esac
+    done
+
+    unset services && return ${TRUE__}
+}
+
+#*******************************************************************************************************
+
+function _prepare_logstash() {
+    __log_info "($@) _prepare_logstash begin ... ... "
+    __create_dir "${LOGSTASH_LOG_DIR_}"
+    __create_dir "${LOGSTASH_LOG_BACKUP_DIR_}"
+    __is_file "${LOGSTASH_LOG_FILE_}"
+    if [ $? == ${TRUE__} ]; then
+        mv ${LOGSTASH_LOG_FILE_} ${LOGSTASH_LOG_FILE_}.$(date +%Y%m%d%H%M%S)
+    fi
+}
+
+function _prepare_es() {
+    __log_info "($@) _prepare_es begin ... ... "
+    __create_dir "${ES_LOG_DIR_}"
+    __create_dir "${ES_LOG_BACKUP_DIR_}"
+    __is_file "${ES_LOG_FILE_}"
+    if [ $? == ${TRUE__} ]; then
+        mv ${ES_LOG_FILE_} ${ES_LOG_FILE_}.$(date +%Y%m%d%H%M%S)
+    fi
+}
+
+function _prepare_kibana() {
+    __log_info "($@) _prepare_kibana begin ... ... "
+    __create_dir "${KIBANA_LOG_DIR_}"
+    __create_dir "${KIBANA_LOG_BACKUP_DIR_}"
+    __is_file "${KIBANA_LOG_FILE_}"
+    if [ $? == ${TRUE__} ]; then
+        mv ${KIBANA_LOG_FILE_} ${KIBANA_LOG_FILE_}.$(date +%Y%m%d%H%M%S)
+    fi
+}
+
+function _prepare_services() {
+    local services=$1
+    __log_info "($@) _prepare_services begin ... ... "
+    services=($(__format_modules "${services}"))
+    for service in ${services[@]}; do
+        case "${service}" in
+            "${LOGSTASH_}")
+                _prepare_logstash
+                ;;
+            "${ES_}")
+                _prepare_es
+                ;;
+            "${KIBANA_}")
+                _prepare_kibana
+                ;;
+            *)
+                continue
+                ;;
+        esac
+    done
+    unset services
+}
+
+#*******************************************************************************************************
+
+function _start_logstash() {
+    __log_info "($@) _start_logstash begin ... ... "
+    _check_logstash
+    if [ $? == ${TRUE__} ]; then
+        _prepare_logstash
+        #cd ${LOGSTASH_ROOT_DIR_}
+        nohup ${LOGSTASH_BIN_FILE_} -f ${LOGSTASH_CONF_FILE_} 2>&1 >> ${LOGSTASH_LOG_FILE_} &
+    else
+        __log_error "($@) Check logstash failed !"
+    fi
+}
+
+function _start_es() {
+    __log_info "($@) _start_es begin ... ... "
+    _check_es
+    if [ $? == ${TRUE__} ]; then
+        _prepare_es
+        #cd ${ES_ROOT_DIR_}
+        nohup ${ES_BIN_FILE_} 2>&1 >> ${ES_LOG_FILE_} &
+    else
+        __log_error "($@) Check es failed !"
+    fi
+}
+
+function _start_kibana() {
+    __log_info "($@) _start_kibana begin ... ... "
+    _check_kibana
+    if [ $? == ${TRUE__} ]; then
+        _prepare_kibana
+        #cd ${KIBANA_ROOT_DIR_}
+        nohup ${KIBANA_BIN_FILE_} 2>&1 >> ${KIBANA_LOG_FILE_} &
+    else
+        __log_error "($@) Check kibana failed !"
+    fi
+}
+
+function _start_services() {
+    local services=$1
+    __log_info "($@) _start_services begin ... ... "
+    services=($(__format_modules "${services}"))
+    for service in ${services[@]}; do
+        case "${service}" in
+            "${LOGSTASH_}")
+                _start_logstash | egrep -wv "egrep|nohup" &
+                ;;
+            "${ES_}")
+                _start_es | egrep -wv "egrep|nohup" &
+                ;;
+            "${KIBANA_}")
+                _start_kibana | egrep -wv "egrep|nohup" &
+                ;;
+            *)
+                continue
+                ;;
+        esac
+    done
+    unset services
+}
+
+#*******************************************************************************************************
+
+function _stop_services() {
+    local services=$1
+    __log_info "($@) _stop_services begin ... ... "
+    services=($(__format_modules "${services}"))
+    for service in ${services[@]}; do
+        local tag=$(__map "${service}" "${MODULE_TAGS_}")
+        if [ -z "${tag}" ]; then
+            tag="${service}"
+        fi
+        __stop_progress "${tag}"
+    done
+    unset services
+}
+
+#*******************************************************************************************************
+
+function _backup_logstash_logs() {
+    __log_info "($@) _backup_logstash_logs begin ... ... "
+    __backup_file "${LOGSTASH_LOG_DIR_}" "${LOGSTASH_LOG_BACKUP_DIR_}"
+}
+
+function _backup_es_logs() {
+    __log_info "($@) _backup_es_logs begin ... ... "
+    __backup_file "${ES_LOG_DIR_}" "${ES_LOG_BACKUP_DIR_}"
+}
+
+function _backup_kibana_logs() {
+    __log_info "($@) _backup_kibana_logs begin ... ... "
+    __backup_file "${KIBANA_LOG_DIR_}" "${KIBANA_LOG_BACKUP_DIR_}"
+}
+
+function _backup_logs() {
+    local services=$1
+    __log_info "($@) _backup_logs begin ... ... "
+    services=($(__format_modules "${services}"))
+    for service in ${services[@]}; do
+        case "${service}" in
+            "${LOGSTASH_}")
+                _backup_logstash_logs
+                ;;
+            "${ES_}")
+                _backup_es_logs
+                ;;
+            "${KIBANA_}")
+                _backup_kibana_logs
+                ;;
+            *)
+                continue
+                ;;
+        esac
+    done
+    unset services
+}
+
+#*******************************************************************************************************
+
+function _manage_es_indices() {
+    local hold_number=$1
+
+    __log_info "($@) _manage_es_indices begin ... ... "
+
+    __is_digit "${hold_number}"
+    if [ $? == ${FALSE__} ]; then
+        hold_number="${DEFAULT_HOLD_NUMBER_}"
+    fi
+
+    local indices=(
+        $(curl 'http://127.0.0.1:9200/_cat/indices?v' 2>/dev/null |
+            awk '{print $3}' |
+            egrep 'logstash' |
+            sort
+        )
+    )
+
+    local remove_number=$((${#indices[@]} - ${hold_number}))
+    if [ ${remove_number} -gt 0 ]; then
+        for index in ${indices[@]:0:${remove_number}}; do
+            if [ -n "${index}" ]; then
+                curl -XDELETE "http://127.0.0.1:9200/${index}"
+            fi
+        done
+        unset indices
+    fi
+}
+
+#*******************************************************************************************************
+
+function _clean_logstash_logs() {
+    local hold_number=$1
+    __log_info "($@) _clean_logstash_logs begin ... ... "
+    __clean_dir "${LOGSTASH_LOG_BACKUP_DIR_}" "${hold_number}"
+}
+
+function _clean_es_logs() {
+    local hold_number=$1
+    __log_info "($@) _clean_es_logs begin ... ... "
+    __clean_dir "${ES_LOG_BACKUP_DIR_}" "${hold_number}"
+}
+
+function _clean_kibana_logs() {
+    local hold_number=$1
+    __log_info "($@) _clean_kibana_logs begin ... ... "
+    __clean_dir "${KIBANA_LOG_BACKUP_DIR_}" "${hold_number}"
+}
+
+function _clean_logs() {
+    local services=$1
+    local hold_number=$2
+    __log_info "($@) _clean_logs begin ... ... "
+    services=($(__format_modules "${services}"))
+    for service in ${services[@]}; do
+        case "${service}" in
+            "${LOGSTASH_}")
+                _clean_logstash_logs "${hold_number}"
+                ;;
+            "${ES_}")
+                _clean_es_logs "${hold_number}"
+                ;;
+            "${KIBANA_}")
+                _clean_kibana_logs "${hold_number}"
+                ;;
+            *)
+                continue
+                ;;
+        esac
+    done
+    unset services
+}
+
+#*******************************************************************************************************
+
+function _show_services() {
+    local services=$1
+    __log_info "($@) _show_services begin ... ... "
+    services=($(__format_modules "${services}"))
+    for service in ${services[@]}; do
+        local tag=$(__map "${service}" "${MODULE_TAGS_}")
+        if [ -z "${tag}" ]; then
+            tag="${service}"
+        fi
+        local progresses=$(__get_progresses "${tag}")
+        if [ -n "${progresses}" ]; then
+            echo -e "Service {${service}} is in progress !"
+        else
+            echo -e "Service {${service}} is not in progress !"
+        fi
+    done
+    unset services
+}
+
+#*******************************************************************************************************
+
+function _run_services() {
+    local modules=$1
+    __log_info "($@) _run_services begin ... ... "
+    _check_services "${modules}"
+    [ $? == ${TRUE__} ] &&
+    _prepare_services "${modules}" &&
+    _start_services "${modules}" &&
+    sleep 1 &&
+    _show_services "${modules}"
+}
+
+#*******************************************************************************************************
+
+function _manage_logs() {
+    local modules=$1
+    local hold_number=$2
+    __log_info "($@) _manage_logs begin ... ... "
+    _check_services "${modules}"
+    [ $? == ${TRUE__} ] &&
+    _prepare_services "${modules}" &&
+    _backup_logs "${modules}" &&
+    _clean_logs "${modules}" "${hold_number}"
+}
+
+#*******************************************************************************************************
+
+function _set_system() {
+    __log_info "($@) _set_system begin ... ... "
+    sudo cp "${SCRIPT_FILE_}" "${SYSTEM_BIN_DIR_}"
+    echo "Copy options below to crontab settings:"
+    echo "${CRONTAB_SETTINGS_}"
+}
+
+function _prepare_installs() {
+    __log_info "($@) _prepare_installs begin ... ... "
+    __create_dir "${OPT_DIR_}"
+    __create_dir "${ELK_DIR_}"
+    __create_dir "${INSTALLATIONS_DIR_}"
+}
+
+function _modify_logstash_config() {
+    __log_info "($@) _modify_logstash_config begin ... ... "
+    __create_dir "${LOGSTASH_CONF_DIR_}"
+    echo -e "${LOGSTASH_CONFIG_CONTENT_}" >> "${LOGSTASH_CONF_FILE_}"
+}
+
+function _install_logstash() {
+    __log_info "($@) _install_logstash begin ... ... "
+    _modify_logstash_config
+}
+
+function _modify_es_config() {
+    __log_info "($@) _modify_es_config begin ... ... "
+    __create_dir "${ES_CONF_DIR_}"
+    echo -e "${ES_CONFIG_CONTENT_}" >> "${ES_CONF_FILE_}"
+}
+
+function _install_es_plugins() {
+    __log_info "($@) _install_es_plugins begin ... ... "
+    __is_file "${ES_PLUGIN_FILE_}"
+    if [ $? == ${TRUE__} ]; then
+        for plugin in ${ES_PLUGINS_[@]}; do
+            if [ -n "${plugin}" ]; then
+                ${ES_PLUGIN_FILE_} install "${plugin}" &&
+                return ${TRUE__}
+            fi
+        done
+    else
+        __log_error "($@) ES doesn't have plugin file !"
+    fi
+    return ${FALSE__}
+}
+
+function _install_es() {
+    __log_info "($@) _install_es begin ... ... "
+    _modify_es_config && _install_es_plugins
+}
+
+function _modify_kibana_config() {
+    __log_info "($@) _modify_kibana_config begin ... ... "
+    __create_dir "${KIBANA_CONF_DIR_}"
+    echo -e "${KIBANA_CONFIG_CONTENT_}" >> "${KIBANA_CONF_FILE_}"
+}
+
+function _install_kibana() {
+    __log_info "($@) _install_kibana begin ... ... "
+    _modify_kibana_config
+}
+
+function _deploy_logstash() {
+    __log_info "($@) _deploy_logstash begin ... ... "
+    __download_file "${LOGSTASH_DOWNLOAD_URL_}" "${INSTALLATIONS_DIR_}"
+    __download_file "${LOGSTASH_SHA1_DOWNLOAD_URL_}" "${INSTALLATIONS_DIR_}"
+    local target_file="${INSTALLATIONS_DIR_}/${LOGSTASH_DOWNLOAD_URL_##*/}"
+    local sha1_file="${INSTALLATIONS_DIR_}/${LOGSTASH_SHA1_DOWNLOAD_URL_##*/}"
+    __check_sha1 "${target_file}" "${sha1_file}"
+    if [ $? == ${TRUE__} ]; then
+        __uncompression "${target_file}" "${ELK_DIR_}" &&
+        _install_logstash &&
+        return ${TRUE__}
+    else
+        __log_error "($@) File check failed !"
+    fi
+    return ${FALSE__}
+}
+
+function _deploy_es() {
+    __log_info "($@) _deploy_es begin ... ... "
+    __download_file "${ES_DOWNLOAD_URL_}" "${INSTALLATIONS_DIR_}"
+    __download_file "${ES_SHA1_DOWNLOAD_URL_}" "${INSTALLATIONS_DIR_}"
+    local target_file="${INSTALLATIONS_DIR_}/${ES_DOWNLOAD_URL_##*/}"
+    local sha1_file="${INSTALLATIONS_DIR_}/${ES_SHA1_DOWNLOAD_URL_##*/}"
+    __check_sha1 "${target_file}" "${sha1_file}"
+    if [ $? == ${TRUE__} ]; then
+        __uncompression "${target_file}" "${ELK_DIR_}" &&
+        _install_es &&
+        return ${TRUE__}
+    else
+        __log_error "($@) File check failed !"
+    fi
+    return ${FALSE__}
+}
+
+function _deploy_kibana() {
+    __log_info "($@) _deploy_kibana begin ... ... "
+    __download_file "${KIBANA_DOWNLOAD_URL_}" "${INSTALLATIONS_DIR_}"
+    __download_file "${KIBANA_SHA1_DOWNLOAD_URL_}" "${INSTALLATIONS_DIR_}"
+    local target_file="${INSTALLATIONS_DIR_}/${KIBANA_DOWNLOAD_URL_##*/}"
+    local sha1_file="${INSTALLATIONS_DIR_}/${KIBANA_SHA1_DOWNLOAD_URL_##*/}"
+    __check_sha1 "${target_file}" "${sha1_file}"
+    if [ $? == ${TRUE__} ]; then
+        __uncompression "${target_file}" "${ELK_DIR_}" &&
+        _install_kibana &&
+        return ${TRUE__}
+    else
+        __log_error "($@) File check failed !"
+    fi
+    return ${FALSE__}
+}
+
+function _deploy_services() {
+    local services=$1
+    __log_info "($@) _deploy_services begin ... ... "
+    _prepare_installs
+    services=($(__format_modules "${services}"))
+    for service in ${services[@]}; do
+        case "${service}" in
+            "${LOGSTASH_}")
+                _deploy_logstash
+                ;;
+            "${ES_}")
+                _deploy_es
+                ;;
+            "${KIBANA_}")
+                _deploy_kibana
+                ;;
+            *)
+                continue
+                ;;
+        esac
+    done
+    _set_system
+    unset services
+}
+
+#*******************************************************************************************************
+
+function _process() {
+    local option=$1
+    local modules=$2
+    local file=$3
+    local directory=$4
+    local hold_number=$5
+
+    __log_info "($@) _process begin ... ... "
+
+    case "${option}" in
+        "${DEFAULT__}")
+            _show_introduction
+            ;;
+        "${START_}")
+            _stop_services "${modules}" &&
+            _start_services "${modules}"
+            sleep 1
+            _show_services "${modules}"
+            ;;
+        "${RUN_}")
+            _stop_services "${modules}" &&
+            _run_services "${modules}"
+            ;;
+        "${STOP_}")
+            _stop_services "${modules}"
+            sleep 1
+            _show_services "${modules}"
+            ;;
+        "${SHOW_}")
+            _show_services "${modules}"
+            ;;
+        "${BACKUP_LOGS_}")
+            _backup_logs "${modules}"
+            ;;
+        "${DEPLOY_}")
+            _stop_services "${modules}" &&
+            _deploy_services "${modules}" &&
+            _run_services "${modules}"
+            ;;
+        "${CLEAN_LOGS_}")
+            _clean_logs "${modules}" "${hold_number}"
+            ;;
+        "${MANAGE_LOGS_}")
+            _manage_logs "${modules}" "${hold_number}"
+            ;;
+        "${MANAGE_ES_}")
+            _manage_es_indices "${hold_number}"
+            ;;
+        "${CLEAN__}")
+            __clean_dir "${directory}" "${hold_number}"
+            ;;
+        "${BACKUP__}")
+            __backup_file "${file}" "${directory}"
+            ;;
+        "${MANAGE__}")
+            __manage_files "${file}" "${directory}" "${hold_number}"
+            ;;
+        *)
+            _show_introduction
+            ;;
+    esac
+}
+
+function _check_parameters() {
+    local option=$1
+    local modules=$2
+    local file=$3
+    local directory=$4
+    local hold_number=$5
+
+    __log_info "($@) _check_parameters begin ... ... "
+
+    case "${option}" in
+        "${DEFAULT__}")
+            echo -e "[ERROR] Parameters error! Please use [-h] for help."
+            return ${FALSE__}
+            ;;
+        "${START_}"|"${RUN_}"|"${STOP_}"|"${SHOW_}"|"${BACKUP_LOGS_}"|"${DEPLOY_}")
+            if [[ -z "${modules}" || "${modules}" == "${NONE__}" ]]; then
+                echo -e "[ERROR] Missing service-parameters! Please add [-a], [-L], [-E], [K] or [-S {SERVICESS}] option , or use [-h] for help."
+                return ${FALSE__}
+            else
+                modules=($(__format_modules "${modules}"))
+                if [ ${#modules[@]} -eq 0 ]; then
+                    echo -e "[ERROR] Missing valid service-parameters! Please use [-a], [-L], [-E], [K] or [-S {INVALID-SERVICESS}] instead, or use [-h] for help."
+                    return ${FALSE__}
+                fi
+                unset modules
+            fi
+            ;;
+        "${CLEAN_LOGS_}"|"${MANAGE_LOGS_}")
+            if [[ -z "${modules}" || "${modules}" == "${NONE__}" ]]; then
+                echo -e "[ERROR] Missing service-parameters! Please add [-a], [-L], [-E], [K] or [-S {SERVICESS}] option , or use [-h] for help."
+                return ${FALSE__}
+            else
+                modules=($(__format_modules "${modules}"))
+                if [ ${#modules[@]} -eq 0 ]; then
+                    echo -e "[ERROR] Missing valid service-parameters! Please use [-a], [-L], [-E], [K] or [-S {INVALID-SERVICESS}] instead, or use [-h] for help."
+                    return ${FALSE__}
+                fi
+                unset modules
+            fi
+
+            __is_digit "${hold_number}"
+            if [ $? == ${FALSE__} ]; then
+                echo -e "[ERROR] Invalid hold-number !"
+                return ${FALSE__}
+            fi
+            ;;
+        "${MANAGE_ES_}")
+            __is_digit "${hold_number}"
+            if [ $? == ${FALSE__} ]; then
+                echo -e "[ERROR] Invalid hold-number !"
+                return ${FALSE__}
+            fi
+            ;;
+        "${CLEAN__}")
+            if [[ -z "${directory}" || "${directory}" == "${NONE__}" ]]; then
+                echo -e "[ERROR] Invalid directory !"
+                return ${FALSE__}
+            fi
+
+            __is_digit "${hold_number}"
+            if [ $? == ${FALSE__} ]; then
+                echo -e "[ERROR] Invalid hold-number !"
+                return ${FALSE__}
+            fi
+            ;;
+        "${BACKUP__}")
+            if [[ -z "${file}" || "${file}" == "${NONE__}" ]]; then
+                echo -e "[ERROR] Invalid file !"
+                return ${FALSE__}
+            fi
+            if [[ -z "${directory}" || "${directory}" == "${NONE__}" ]]; then
+                echo -e "[ERROR] Invalid directory !"
+                return ${FALSE__}
+            fi
+            ;;
+        "${MANAGE__}")
+            if [[ -z "${file}" || "${file}" == "${NONE__}" ]]; then
+                echo -e "[ERROR] Invalid file !"
+                return ${FALSE__}
+            fi
+
+            if [[ -z "${directory}" || "${directory}" == "${NONE__}" ]]; then
+                echo -e "[ERROR] Invalid directory !"
+                return ${FALSE__}
+            fi
+
+            __is_digit "${hold_number}"
+            if [ $? == ${FALSE__} ]; then
+                echo -e "[ERROR] Invalid hold-number !"
+                return ${FALSE__}
+            fi
+            ;;
+        *)
+            _show_introduction
+            ;;
+    esac
+
+    return ${TRUE__}
+}
+
+function _show_introduction() {
+    __log_info "($@) _show_introduction begin ... ... "
+    echo -e "${__VERSION__}"
+    echo -e "${__DESCRIPTION__}"
+    echo -e "${__INTRODUCTION__}"
+    echo -e "${__WARNING__}"
+}
+
+#########################################################################
+# Main function for this script.
+# Globals:
+#     None
+# Arguments:
+#     None
+# Returns:
+#     None
+#########################################################################
+function main() {
+    local option="${DEFAULT__}"
+    local services="${NONE__}"
+    local file="${NONE__}"
+    local directory="${NONE__}"
+    local hold_number="${DEFAULT_HOLD_NUMBER_}"
+
+    __log_info "($@) Optelk begin ... ... "
+
+    if [ $# == 0 ]; then
+        _show_introduction
+        __exit "${FAIL__}"
+    fi
+
+    while getopts ":S:F:D:N:L:BCMelkadsrpwbcgnvmh" opt; do
+        case "${opt}" in
+            S)
+                services="${OPTARG}"
+                ;;
+            F)
+                file="${OPTARG}"
+                ;;
+            D)
+                directory="${OPTARG}"
+                ;;
+            N)
+                hold_number="${OPTARG}"
+                ;;
+            L)
+                OPT_ELK_LOG_="${OPTARG}"
+                ;;
+            B)
+                option="${BACKUP__}"
+                ;;
+            C)
+                option="${CLEAN__}"
+                ;;
+            M)
+                option="${MANAGE__}"
+                ;;
+            e)
+                services="${ES_}"
+                ;;
+            l)
+                services="${LOGSTASH_}"
+                ;;
+            k)
+                services="${KIBANA_}"
+                ;;
+            a)
+                services="${ALL__}"
+                ;;
+            d)
+                option="${DEPLOY_}"
+                ;;
+            s)
+                option="${START_}"
+                ;;
+            r)
+                option="${RUN_}"
+                ;;
+            p)
+                option="${STOP_}"
+                ;;
+            w)
+                option="${SHOW_}"
+                ;;
+            b)
+                option="${BACKUP_LOGS_}"
+                ;;
+            c)
+                option="${CLEAN_LOGS_}"
+                ;;
+            g)
+                option="${MANAGE_LOGS_}"
+                ;;
+            n)
+                option="${MANAGE_ES_}"
+                ;;
+            v)
+                echo -e "${__VERSION__}"
+                echo -e "${__WARNING__}"
+                __exit "${SUCCESS__}"
+                ;;
+            m)
+                echo -e "${__DESCRIPTION__}"
+                echo -e "${__WARNING__}"
+                __exit "${SUCCESS__}"
+                ;;
+            h)
+                _show_introduction
+                __exit "${SUCCESS__}"
+                ;;
+            *)
+                continue
+                ;;
+        esac
+    done
+
+    _check_parameters "${option}" "${services}" "${file}" "${directory}" "${hold_number}"
+    [ $? == ${TRUE__} ] && _process "${option}" "${services}" "${file}" "${directory}" "${hold_number}"
+    __log_info "($@) Optelk finish !" && _unset_all
+}
+
+function _unset_all_variables() {
+    unset -v __VERSION__
+    unset -v __WARNING__
+    unset -v __DESCRIPTION__
+    unset -v __INTRODUCTION__
+
+    unset -v TRUE__
+    unset -v FALSE__
+    unset -v FAIL__
+    unset -v SUCCESS__
+    unset -v ALL__
+    unset -v NONE__
+    unset -v DEFAULT__
+    unset -v INFO__
+    unset -v DEBUG__
+    unset -v WARN__
+    unset -v ERROR__
+    unset -v FATAL__
+    unset -v DIR_TYPE__
+    unset -v FILE_TYPE__
+    unset -v LINK_TYPE__
+    unset -v DIR_LINK_TYPE__
+    unset -v FILE_LINK_TYPE__
+    unset -v NONE_TYPE__
+    unset -v BACKUP__
+    unset -v CLEAN__
+    unset -v MANAGE__
+
+    unset -v START_
+    unset -v RUN_
+    unset -v STOP_
+    unset -v SHOW_
+    unset -v BACKUP_LOGS_
+    unset -v CLEAN_LOGS_
+    unset -v MANAGE_LOGS_
+    unset -v MANAGE_ES_
+    unset -v DEPLOY_
+    unset -v LOGSTASH_
+    unset -v ES_
+    unset -v KIBANA_
+    unset -v LOGSTASH_DOWNLOAD_URL_
+    unset -v LOGSTASH_SHA1_DOWNLOAD_URL_
+    unset -v ES_DOWNLOAD_URL_
+    unset -v ES_SHA1_DOWNLOAD_URL_
+    unset -v KIBANA_DOWNLOAD_URL_
+    unset -v KIBANA_SHA1_DOWNLOAD_URL_
+    unset -v KIBANA_DOWNLOAD_URL_
+    unset -v KIBANA_SHA1_DOWNLOAD_URL_
+    unset -v OPT_DIR_
+    unset -v ELK_DIR_
+    unset -v INSTALLATIONS_DIR_
+    unset -v LOGSTASH_ROOT_DIR_
+    unset -v LOGSTASH_BIN_DIR_
+    unset -v LOGSTASH_CONF_DIR_
+    unset -v LOGSTASH_LOG_DIR_
+    unset -v LOGSTASH_LOG_BACKUP_DIR_
+    unset -v LOGSTASH_BIN_FILE_
+    unset -v LOGSTASH_CONF_FILE_
+    unset -v LOGSTASH_LOG_FILE_
+    unset -v ES_ROOT_DIR_
+    unset -v ES_BIN_DIR_
+    unset -v ES_CONF_DIR_
+    unset -v ES_LOG_DIR_
+    unset -v ES_LOG_BACKUP_DIR_
+    unset -v ES_BIN_FILE_
+    unset -v ES_PLUGIN_FILE_
+    unset -v ES_CONF_FILE_
+    unset -v ES_LOG_FILE_
+    unset -v ES_PLUGINS_
+    unset -v KIBANA_ROOT_DIR_
+    unset -v KIBANA_BIN_DIR_
+    unset -v KIBANA_CONF_DIR_
+    unset -v KIBANA_LOG_DIR_
+    unset -v KIBANA_LOG_BACKUP_DIR_
+    unset -v KIBANA_BIN_FILE_
+    unset -v KIBANA_CONF_FILE_
+    unset -v KIBANA_LOG_FILE_
+    unset -v LOGSTASH_CONFIG_CONTENT_
+    unset -v ES_CONFIG_CONTENT_
+    unset -v KIBANA_CONFIG_CONTENT_
+    unset -v DEFAULT_HOLD_NUMBER_
+    unset -v MODULE_MARKS_
+    unset -v MODULE_TAGS_
+    unset -v ALL_MODULES_
+    unset -v OPT_ELK_LOG_
+}
+
+function _unset_all_functions() {
+    unset -f __get_localhost
+    unset -f __get_filename
+    unset -f __map
+    unset -f __write_log
+    unset -f __log_info
+    unset -f __log_debug
+    unset -f __log_warn
+    unset -f __log_error
+    unset -f __log_fatal
+    unset -f __exit
+    unset -f __split
+    unset -f __get_module
+    unset -f __format_modules
+    unset -f __exist_file
+    unset -f __get_linktype
+    unset -f __get_filetype
+    unset -f __rename_file
+    unset -f __create_dir
+    unset -f __is_directory
+    unset -f __is_file
+    unset -f __stop_progress
+    unset -f __command_exist
+    unset -f __download_file
+    unset -f __check_sha1
+    unset -f __uncompression
+    unset -f __get_progresses
+    unset -f __is_digit
+    unset -f __clean_dir
+    unset -f __backup_file
+    unset -f __manage_files
+
+    unset -f _check_global
+    unset -f _check_logstash
+    unset -f _check_es
+    unset -f _check_kibana
+    unset -f _check_services
+    unset -f _prepare_logstash
+    unset -f _prepare_es
+    unset -f _prepare_kibana
+    unset -f _prepare_services
+    unset -f _start_logstash
+    unset -f _start_es
+    unset -f _start_kibana
+    unset -f _start_services
+    unset -f _stop_services
+    unset -f _backup_logstash_logs
+    unset -f _backup_es_logs
+    unset -f _backup_kibana_logs
+    unset -f _backup_logs
+    unset -f _manage_es_indices
+    unset -f _clean_logstash_logs
+    unset -f _clean_es_logs
+    unset -f _clean_kibana_logs
+    unset -f _clean_logs
+    unset -f _show_services
+    unset -f _run_services
+    unset -f _manage_logs
+    unset -f _prepare_installs
+    unset -f _modify_logstash_config
+    unset -f _install_logstash
+    unset -f _modify_es_config
+    unset -f _install_es_plugins
+    unset -f _install_es
+    unset -f _modify_kibana_config
+    unset -f _install_kibana
+    unset -f _deploy_logstash
+    unset -f _deploy_es
+    unset -f _deploy_kibana
+    unset -f _deploy_services
+    unset -f _process
+    unset -f _check_parameters
+    unset -f _show_introduction
+    unset -f _unset_all_variables
+    unset -f _unset_all_functions
+    unset -f _unset_all
+}
+
+function _unset_all() {
+    #_unset_all_variables
+    _unset_all_functions
+}
+
+main "$@"
