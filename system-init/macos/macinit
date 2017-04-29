@@ -1,0 +1,793 @@
+#!/bin/bash
+
+# Copyright (c) 2016 Zichoole Inc.
+# All rights reserved.
+#
+# "Mac Initializer" version 1.0
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are
+# met:
+#
+#    * Redistributions of source code must retain the above copyright
+# notice, this list of conditions and the following disclaimer.
+#    * Redistributions in binary form must reproduce the above
+# copyright notice, this list of conditions and the following disclaimer
+# in the documentation and/or other materials provided with the
+# distribution.
+#    * Neither the name of Zichoole Inc. nor the names of its
+# contributors may be used to endorse or promote products derived from
+# this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL__ THE COPYRIGHT
+# OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES_; LOSS OF USE,
+# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+# ---
+# Author:  Zichoole
+# Created: 2017-02-14 10:46:00
+# E-mail:  zichoole@gmail.com
+#
+# ---
+# Description:
+#   The initializer of mac for developer.
+#
+# ---
+# TODO:
+#   *1. Add "clean target", "clean repository" function;
+#   *2. Add target modules to process.
+#
+#******************************************************************************
+
+readonly __VERSION__='
+    \033[46;30m VERSION 1.0, Copyright (C) 2017 IUV Inc. \033[0m \n
+'
+
+readonly __WARNING__='
+    \033[41;33m \033[05m [WARNING] Need bash version 4.1.x above ! \033[0m \n
+'
+
+readonly __DESCRIPTION__='
+    \033[43;34m Do some system settings, and deploy some installs. \033[0m \n
+'
+
+readonly __INTRODUCTION__='
+    \033[44;37m Usage: \033[0m \n
+        \t \033[47;30m macopt ! \033[0m \n\n
+'
+
+#******************************************************************************
+
+readonly TRUE__=0
+readonly FALSE__=1
+
+readonly FAIL__="fail"
+readonly SUCCESS__="success"
+
+readonly ALL__="all"
+readonly NONE__="none"
+readonly DEFAULT__="default"
+
+readonly NONE_TYPE__=0
+readonly DIR_TYPE__=10
+readonly FILE_TYPE__=20
+readonly LINK_TYPE__=30
+readonly DIR_LINK_TYPE__=31
+readonly FILE_LINK_TYPE__=32
+
+readonly UNKNOWN__=0
+readonly DARWIN__=1
+readonly LINUX__=2
+
+#******************************************************************************
+
+readonly WORKSPACE="${HOME}/WORKSPACE"
+
+#******************************************************************************
+
+MAC_OPT_LOG_="/dev/stdout"
+
+#******************************************************************************
+
+function __write_log() {
+    local genre=$1
+    local message=$2
+
+    case "${genre}" in
+        "${INFO__}")
+            ;;
+        "${DEBUG__}")
+            ;;
+        "${WARN__}")
+            ;;
+        "${ERROR__}")
+            ;;
+        "${FATAL__}")
+            ;;
+        *)
+            genre="${INFO__}"
+            ;;
+    esac
+
+    echo -e \
+        "[$(date "+%Y-%m-%d %H:%M:%S.%N %Z")] [${genre}] [${FUNCNAME[@]}]" \
+        "${message}" 2>&1 >> ${MAC_OPT_LOG_}
+}
+
+function __log_info() {
+    local message=$1
+    __write_log "${INFO__}" "${message}"
+}
+
+function __log_debug() {
+    local message=$1
+    __write_log "${DEBUG__}" "${message}"
+}
+
+function __log_warn() {
+    local message=$1
+    __write_log "${WARN__}" "${message}"
+}
+
+function __log_error() {
+    local message=$1
+    __write_log "${ERROR__}" "${message}"
+}
+
+function __log_fatal() {
+    local message=$1
+    __write_log "${FATAL__}" "${message}"
+}
+
+#******************************************************************************
+
+function __verify_system() {
+    case "$(uname -o | tr '[A-Z]' '[a-z]')" in
+        *"${DARWIN__}"*)
+            return ${DARWIN__}
+            ;;
+        *"${LINUX__}"*)
+            return ${LINUX__}
+            ;;
+        *)
+            return ${UNKNOWN__}
+            ;;
+    esac
+}
+
+function __get_localhost() {
+    echo "$(
+        ifconfig -a |
+        egrep 'inet' |
+        egrep -v '127.0.0.1' |
+        egrep -v 'inet6' |
+        awk '{print $2}' |
+        tr -d 'addr:'
+    )"
+}
+
+function __exit() {
+    local exit_code=$1
+    case "${exit_code}" in
+        "")
+            exit ${TRUE__}
+            ;;
+        "${SUCCESS__}")
+            exit ${TRUE__}
+            ;;
+        "${FAIL__}")
+            exit ${FALSE__}
+            ;;
+        *)
+            exit ${FALSE__}
+            ;;
+    esac
+}
+
+function __command_exist() {
+    local command=$1
+    if [ -n "$(command -v ${command})" ]; then
+        return ${TRUE__}
+    fi
+    return ${FALSE__}
+}
+
+#******************************************************************************
+
+function __map() {
+    local key=$1
+    local map_string=$2
+
+    echo "${map_string}" |
+    sed 's/^[ \t\n\r]*//g' |
+    sed 's/[ \t\n\r]*$//g' |
+    awk '
+        BEGIN {
+            value = ""
+        }
+        {
+            split($1, items, ";");
+            for (i in items) {
+                if (length(items[i]) > 0) {
+                    split(items[i], key_value, ":");
+                    if (length(key_value) == 2) {
+                        if (key_value[1] == "'"${key}"'") {
+                            value = key_value[2]
+                        }
+                    }
+                }
+            }
+        }
+        END {
+            print value
+        }
+    '
+}
+
+function __is_digit() {
+    local original_string=$1
+    local digit_string="$(echo ${string} | egrep -o '[1-9][0-9]{0,}|[0-9]')"
+    if [ "${string}" == "${digit_string}" ]; then
+        return ${TRUE__}
+    fi
+    return ${FALSE__}
+}
+
+function __split() {
+    local string=$1
+    local split_char=$2
+
+    local OLD_IFS="${IFS}"
+    IFS="${split_char}"
+    local array=(${string})
+    IFS="${OLD_IFS}"
+    echo "${array[@]}" && unset array
+}
+
+#******************************************************************************
+
+function __exist_file() {
+    local file=$1
+    if [ -z "${file}" ]; then
+        return ${FALSE__}
+    fi
+    local info=$(ls ${file} 2>&1 | egrep "cannot access")
+    if [ -n "${info}" ]; then
+        return ${FALSE__}
+    fi
+    return ${TRUE__}
+}
+
+function __get_linktype() {
+    local link_file=$1
+    if [[ -z "${link_file}" || ! -h "${link_file}" ]]; then
+        return ${NONE_TYPE__}
+    fi
+    __exist_file "${link_file}/"
+    if [ $? == ${TRUE__} ]; then
+        return ${DIR_LINK_TYPE__}
+    fi
+    return ${FILE_LINK_TYPE__}
+}
+
+function __get_filetype() {
+    local file=$1
+    if [ -d "${file}" ]; then
+        return ${DIR_TYPE__}
+    fi
+
+    if [ -h "${file}" ]; then
+        __get_linktype "${file}"
+        return $?
+    fi
+
+    if [ -f "${file}" ]; then
+        return ${FILE_TYPE__}
+    fi
+
+    return ${NONE_TYPE__}
+}
+
+function __rename_file() {
+    local origin_file=$1
+    local target_dir=$2
+    __log_info "($@) __rename_file begin ... ... "
+    __exist_file "${origin_file}"
+    if [ $? == ${TRUE__} ]; then
+        mv "${origin_file}" "${origin_file}.$(date +%Y%m%d%H%M%S)"
+    fi
+}
+
+function __create_dir() {
+    local dir=$1
+    __log_info "($@) __create_dir begin ... ... "
+    __is_directory "${dir}"
+    if [ $? == ${FALSE__} ]; then
+        if [[ -h "${dir}" || -f "${dir}" ]]; then
+            mv "${dir}" "${dir}.$(date +%Y%m%d%H%M%S)"
+        fi
+        mkdir -p "${dir}"
+    fi
+}
+
+function __is_directory() {
+    local dir=$1
+    __get_filetype "${dir}"
+    local filetype=$?
+    if [ ${filetype} == ${DIR_TYPE__} ]; then
+        return ${TRUE__}
+    fi
+    if [ ${filetype} == ${DIR_LINK_TYPE__} ]; then
+        return ${TRUE__}
+    fi
+    return ${FALSE__}
+}
+
+function __is_file() {
+    local file=$1
+    __get_filetype "${file}"
+    local filetype=$?
+    if [ ${filetype} == ${FILE_TYPE__} ]; then
+        return ${TRUE__}
+    fi
+    if [ ${filetype} == ${FILE_LINK_TYPE__} ]; then
+        return ${TRUE__}
+    fi
+    return ${FALSE__}
+}
+
+function __clean_dir() {
+    local directory=$1
+    local hold_number=$2
+
+    __log_info "($@) __clean_dir begin ... ... "
+
+    __is_digit "${hold_number}"
+    if [ $? == ${FALSE__} ]; then
+        hold_number="${DEFAULT_HOLD_NUMBER_}"
+    fi
+
+    __is_directory "${directory}"
+    if [ $? == ${TRUE__} ]; then
+        directory="$(readlink -f ${directory})"
+        local files_number="$(ls -A ${directory} | wc -l)"
+        local remove_number=$((${files_number} - ${hold_number}))
+        if [ ${remove_number} -gt 0 ]; then
+            local remove_files=($(
+                ls -At "${directory}" | tail -n "${remove_number}"
+            ))
+            for file in ${remove_files[@]}; do
+                if [[ -n "${directory}" && -n "${file}" ]]; then
+                    rm -rf "${directory}/${file}"
+                fi
+            done
+            unset remove_files
+        fi
+    fi
+}
+
+function __backup_file() {
+    local origin_file=$1
+    local backup_dir=$2
+
+    __log_info "($@) __backup_file begin ... ... "
+
+    if [ -n "${backup_dir}" ]; then
+        __create_dir "${backup_dir}" &&
+        backup_dir="${backup_dir}/$(date +%Y%m%d%H%M%S)"
+
+        __get_filetype "${origin_file}"
+        local filetype=$?
+        if [ ${filetype} == ${DIR_TYPE__} ]; then
+            if [ -n "$(ls -A ${origin_file}/)" ]; then
+                __rename_file "${backup_dir}" &&
+                mv "${origin_file}" "${backup_dir}" &&
+                mkdir -p "${origin_file}"
+            fi
+        elif [ ${filetype} == ${FILE_TYPE__} ]; then
+            __rename_file "${backup_dir}" &&
+            mkdir -p "${backup_dir}" &&
+            mv "${origin_file}" "${backup_dir}"
+        elif [ ${filetype} == ${DIR_LINK_TYPE__} ]; then
+            if [ -n "$(ls -A ${origin_file}/)" ]; then
+                origin_file="$(readlink -f ${origin_file})"
+                __rename_file "${backup_dir}" &&
+                mv "${origin_file}" "${backup_dir}" &&
+                mkdir -p "${origin_file}"
+            fi
+        elif [ ${filetype} == ${FILE_LINK_TYPE__} ]; then
+            origin_file="$(readlink -f ${origin_file})"
+            __rename_file "${backup_dir}" &&
+            mkdir -p "${backup_dir}" &&
+            mv "${origin_file}" "${backup_dir}"
+        else
+            __log_error "($@) Origin filename error !"
+            return ${FALSE__}
+        fi
+    else
+        __log_error "($@) Backup directory error !"
+        return ${FALSE__}
+    fi
+
+    return ${TRUE__}
+}
+
+function __download_file() {
+    local download_url=$1
+    local download_dir=$2
+    local filename=$3
+
+    __log_info "($@) __download_file begin ... ... "
+
+    if [ -z "${filename}" ]; then
+        filename=${download_url##*/}
+    fi
+
+    __is_directory "${download_dir}"
+    if [ $? == ${TRUE__} ]; then
+        if [ -n "${download_url}" ]; then
+            __command_exist "wget"
+            if [ $? == ${TRUE__} ]; then
+                __is_file "${download_dir}/${filename}"
+                if [ $? == ${FALSE__} ]; then
+                    wget -c -N -np -nd -t 20 -T 20 \
+                        --limit-rate=20M \
+                        -O "${download_dir}/${filename}" \
+                        "${download_url}"
+                else
+                    __log_info "($@) Download file already exist !"
+                fi
+                return ${TRUE__}
+            else
+                __command_exist "curl"
+                if [ $? == ${TRUE__} ]; then
+                    __is_file "${download_dir}/${filename}"
+                    if [ $? == ${FALSE__} ]; then
+                        curl -C -m 20 \
+                            --limit-rate 20M \
+                            --connect-timeout 10 \
+                            -o "${download_dir}/${filename}" \
+                            "${download_url}"
+                    else
+                        __log_info "($@) Download file already exist !"
+                    fi
+                    return ${TRUE__}
+                else
+                    __log_error "($@) Download command not exist !"
+                fi
+            fi
+        else
+            __log_error "($@) Invalid download url !"
+        fi
+    else
+        __log_error "($@) Invalid download dir !"
+    fi
+
+    return ${FALSE__}
+}
+
+function __check_sha1() {
+    local target_file=$1
+    local sha1_file=$2
+
+    __log_info "($@) __check_sha1 begin ... ... "
+
+    __is_file "${target_file}"
+    if [ $? == ${FALSE__} ]; then
+        return ${FALSE__}
+    fi
+
+    __is_file "${sha1_file}"
+    if [ $? == ${FALSE__} ]; then
+        return ${FALSE__}
+    fi
+
+    local current_sha1="$(sha1sum ${target_file} | awk '{print $1}')"
+    local right_sha1="$(cat ${sha1_file} | awk '{print $1}')"
+    if [ "${current_sha1}" != "${right_sha1}" ]; then
+        return ${FALSE__}
+    fi
+
+    return ${TRUE__}
+}
+
+function __uncompression() {
+    local compression_file=$1
+    local uncompression_dir=$2
+
+    __log_info "($@) __uncompression begin ... ... "
+
+    __is_file "${compression_file}"
+    if [ $? == ${TRUE__} ]; then
+        __is_directory "${uncompression_dir}"
+        if [ $? == ${TRUE__} ]; then
+            case "${compression_file}" in
+                *.tar)
+                    tar -xf "${compression_file}" -C "${uncompression_dir}"
+                    return ${TRUE__}
+                    ;;
+                *.tar.gz|.tgz)
+                    tar -xzf "${compression_file}" -C "${uncompression_dir}"
+                    return ${TRUE__}
+                    ;;
+                *.tar.bz2)
+                    tar -xjf "${compression_file}" -C "${uncompression_dir}"
+                    return ${TRUE__}
+                    ;;
+                *.tar.Z)
+                    tar -xZf "${compression_file}" -C "${uncompression_dir}"
+                    return ${TRUE__}
+                    ;;
+                *.gz)
+                    gunzip -c "${compression_file}" > \
+                        "${uncompression_dir}/${compression_file##/}"
+                    return ${TRUE__}
+                    ;;
+                *.Z)
+                    uncompress -c "${compression_file}" > \
+                        "${uncompression_dir}/${compression_file##/}"
+                    return ${TRUE__}
+                    ;;
+                *.bz2)
+                    bunzip2 -c "${compression_file}" > \
+                        "${uncompression_dir}/${compression_file##/}"
+                    return ${TRUE__}
+                    ;;
+                *.zip)
+                    unzip "${compression_file}" -d "${uncompression_dir}"
+                    return ${TRUE__}
+                    ;;
+                *)
+                    __log_error "($@) Not supported compression file !"
+                    ;;
+            esac
+        else
+            __log_error "($@) Uncompression-Directory not exist !"
+        fi
+    else
+        __log_error "($@) Compression-File not exist !"
+    fi
+
+    return ${FALSE__}
+}
+
+function __get_progresses() {
+    local progress_tag=$1
+    if [ -n "${progress_tag}" ]; then
+        local progresses=(
+            $(ps aux | \
+                egrep "${progress_tag}" | \
+                egrep -v "egrep" | \
+                awk '{print $2}'\
+            )
+        )
+        if [ ${#progresses[@]} -gt 0 ]; then
+            echo "${progresses[@]}"
+        else
+            echo ""
+        fi
+        unset progresses
+    else
+        echo ""
+    fi
+}
+
+function __stop_progress() {
+    local progress_tag=$1
+    __log_info "($@) __stop_progress begin ... ... "
+    local progresses=($(__get_progresses "${progress_tag}"))
+    if [ ${#progresses[@]} -gt 0 ]; then
+        for progress_id in ${progresses[@]}; do
+            __is_digit "${progress_id}"
+            if [ $? == ${TRUE__} ]; then
+                kill -9 "${progress_id}"
+            fi
+        done
+    fi
+    unset progresses
+}
+
+#******************************************************************************
+
+function _create_dirs() {
+    __create_dir "${WORKSPACE}"
+
+    __create_dir "${WORKSPACE}/SYSTEM"
+    __create_dir "${WORKSPACE}/SYSTEM/BIN"
+    __create_dir "${WORKSPACE}/SYSTEM/TOOLS"
+    __create_dir "${WORKSPACE}/SYSTEM/PLUGINS"
+    __create_dir "${WORKSPACE}/SYSTEM/INSTALLS"
+
+    __create_dir "${WORKSPACE}/TEMP"
+    __create_dir "${WORKSPACE}/TESTS"
+    __create_dir "${WORKSPACE}/BACKUPS"
+    __create_dir "${WORKSPACE}/RECYCLE"
+
+    __create_dir "${WORKSPACE}/HOME"
+    __create_dir "${WORKSPACE}/HOME/MUSIC"
+    __create_dir "${WORKSPACE}/HOME/MOVIES"
+    __create_dir "${WORKSPACE}/HOME/PUBLIC"
+    __create_dir "${WORKSPACE}/HOME/DESKTOP"
+    __create_dir "${WORKSPACE}/HOME/PICTURES"
+    __create_dir "${WORKSPACE}/HOME/LIBRARIES"
+    __create_dir "${WORKSPACE}/HOME/DOCUMENTS"
+    __create_dir "${WORKSPACE}/HOME/DOWNLOADS"
+
+    __create_dir "${WORKSPACE}/PROJECTS"
+}
+
+function _create_files() {
+}
+
+function _create_links() {
+    local sources=(\
+        "${WORKSPACE}/HOME/vim" \
+        "${WORKSPACE}/HOME/vimrc" \
+        "${WORKSPACE}/HOME/recycle" \
+        "${WORKSPACE}/HOME/tmux.conf" \
+        "${WORKSPACE}/HOME/dir_colors" \
+        "${WORKSPACE}/HOME/bash_profile" \
+    )
+
+    for src in ${sources[@]}; do
+        target="${HOME}/.${src##*/}"
+        __rename_file "${target}"
+        ln -s "${src}" "${target}"
+    done
+}
+
+#******************************************************************************
+
+function _process() {
+    local option=$1
+
+    __log_info "($@) _process begin ... ... "
+
+    case "${option}" in
+        "${DEFAULT__}")
+            _show_introduction
+            ;;
+        "${RUN__}")
+            _create_dirs
+            _create_files
+            _create_links
+            ;;
+        *)
+            _show_introduction
+            ;;
+    esac
+}
+
+function _check_parameters() {
+    local option=$1
+
+    __log_info "($@) _check_parameters begin ... ... "
+
+    case "${option}" in
+        "${DEFAULT__}")
+            echo -e "[ERROR] Parameters error! Please use [-h] for help."
+            return ${FALSE__}
+            ;;
+        *)
+            _show_introduction
+            ;;
+    esac
+
+    return ${TRUE__}
+
+function _show_introduction() {
+    __log_info "($@) _show_introduction begin ... ... "
+    echo -e "${__VERSION__}"
+    echo -e "${__DESCRIPTION__}"
+    echo -e "${__INTRODUCTION__}"
+    echo -e "${__WARNING__}"
+}
+
+function _unset_all_variables() {
+    unset -v MAC_OPT_LOG_
+}
+
+function _unset_all_functions() {
+    unset -f __get_localhost
+    unset -f __get_filename
+    unset -f __map
+    unset -f __write_log
+    unset -f __log_info
+    unset -f __log_debug
+    unset -f __log_warn
+    unset -f __log_error
+    unset -f __log_fatal
+    unset -f __exit
+    unset -f __split
+    unset -f __get_module
+    unset -f __exist_file
+    unset -f __get_linktype
+    unset -f __get_filetype
+    unset -f __rename_file
+    unset -f __create_dir
+    unset -f __is_directory
+    unset -f __is_file
+    unset -f __stop_progress
+    unset -f __command_exist
+    unset -f __download_file
+    unset -f __check_sha1
+    unset -f __uncompression
+    unset -f __get_progresses
+    unset -f __is_digit
+    unset -f __clean_dir
+    unset -f __backup_file
+
+    unset -f _process
+    unset -f _check_parameters
+    unset -f _show_introduction
+    unset -f _unset_all_variables
+    unset -f _unset_all_functions
+    unset -f _unset_all
+}
+
+function _unset_all() {
+    _unset_all_variables
+    _unset_all_functions
+}
+
+#******************************************************************************
+# Main function for this script.
+# Globals:
+#     None
+# Arguments:
+#     None
+# Returns:
+#     None
+#******************************************************************************
+function main() {
+    local option="${DEFAULT__}"
+
+    __log_info "($@) Macopt begin ... ... "
+
+    if [ $# == 0 ]; then
+        option="${RUN__}"
+    fi
+
+    while getopts ":l:rvmh" opt; do
+        case "${opt}" in
+            l)
+                MAC_OPT_LOG_="${OPTARG}"
+                ;;
+            r)
+                option="${RUN__}"
+                ;;
+            v)
+                echo -e "${__VERSION__}"
+                echo -e "${__WARNING__}"
+                __exit "${SUCCESS__}"
+                ;;
+            m)
+                echo -e "${__DESCRIPTION__}"
+                echo -e "${__WARNING__}"
+                __exit "${SUCCESS__}"
+                ;;
+            h)
+                _show_introduction
+                __exit "${SUCCESS__}"
+                ;;
+            *)
+                continue
+                ;;
+        esac
+    done
+
+    _check_parameters "${option}"
+    [ $? == ${TRUE__} ] && _process "${option}"
+
+    __log_info "($@) Macopt finish !" && _unset_all
+}
+
+main "$@"
